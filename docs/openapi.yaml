@@ -1,0 +1,189 @@
+openapi: 3.0.3
+info:
+  title: Расписание без накладок
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+          required: [code, message]
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200': {description: OK}
+  /resources:
+    get:
+      summary: List resources
+      parameters:
+        - {in: query, name: type, schema: {type: string}}
+        - {in: query, name: active, schema: {type: boolean}}
+      responses:
+        '200': {description: Resource list}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    post:
+      summary: Create resource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: {type: string}
+                type: {type: string}
+                description: {type: string}
+                location: {type: string}
+                capacity: {type: integer}
+                is_active: {type: boolean}
+      responses:
+        '201': {description: Created}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /resources/available:
+    get:
+      summary: Resources available during interval
+      parameters:
+        - {in: query, name: from, required: true, schema: {type: string, format: date-time}}
+        - {in: query, name: to, required: true, schema: {type: string, format: date-time}}
+      responses:
+        '200': {description: Available resources}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /resources/{id}:
+    get:
+      summary: Get resource
+      parameters: [{in: path, name: id, required: true, schema: {type: integer}}]
+      responses:
+        '200': {description: Resource}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '404': {description: Not found, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+    patch:
+      summary: Update resource (send all fields)
+      parameters: [{in: path, name: id, required: true, schema: {type: integer}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: {type: string}
+                type: {type: string}
+                description: {type: string}
+                location: {type: string}
+                capacity: {type: integer}
+                is_active: {type: boolean}
+      responses:
+        '200': {description: Updated}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '404': {description: Not found, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /resources/{id}/bookings:
+    get:
+      summary: Active schedule in range
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+        - {in: query, name: from, required: true, schema: {type: string, format: date-time}}
+        - {in: query, name: to, required: true, schema: {type: string, format: date-time}}
+      responses:
+        '200': {description: Schedule}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /resources/{id}/availability:
+    get:
+      summary: Free intervals
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+        - {in: query, name: from, required: true, schema: {type: string, format: date-time}}
+        - {in: query, name: to, required: true, schema: {type: string, format: date-time}}
+        - {in: query, name: duration, schema: {type: string, example: 30m}}
+      responses:
+        '200': {description: Free intervals}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '404': {description: Not found, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /users:
+    post:
+      summary: Create user (no authentication)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: {type: string}
+      responses:
+        '201': {description: Created}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /users/{id}/bookings:
+    get:
+      summary: List user bookings
+      parameters:
+        - {in: path, name: id, required: true, schema: {type: integer}}
+        - {in: query, name: status, schema: {type: string, enum: [active, canceled]}}
+        - {in: query, name: resource_id, schema: {type: integer}}
+        - {in: query, name: from, schema: {type: string, format: date-time}}
+        - {in: query, name: to, schema: {type: string, format: date-time}}
+      responses:
+        '200': {description: Bookings}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /bookings:
+    post:
+      summary: Create booking using SERIALIZABLE transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource_id, user_id, start_at, end_at]
+              properties:
+                resource_id: {type: integer}
+                user_id: {type: integer}
+                start_at: {type: string, format: date-time}
+                end_at: {type: string, format: date-time}
+      responses:
+        '201': {description: Created}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '404': {description: Not found, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '409': {description: Interval conflict, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '422': {description: Invalid interval, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '503': {description: Serialization retries exhausted, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /bookings/{id}:
+    get:
+      summary: Get booking
+      parameters: [{in: path, name: id, required: true, schema: {type: integer}}]
+      responses:
+        '200': {description: Booking}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '404': {description: Not found, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+  /bookings/{id}/cancel:
+    post:
+      summary: Cancel own booking idempotently
+      parameters: [{in: path, name: id, required: true, schema: {type: integer}}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: {type: integer}
+      responses:
+        '200': {description: Canceled}
+        '400': {description: Bad request, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '403': {description: Forbidden, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '404': {description: Not found, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        '503': {description: Serialization retries exhausted, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
